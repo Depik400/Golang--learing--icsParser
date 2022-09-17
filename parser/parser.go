@@ -3,6 +3,7 @@ package icsParser
 import (
 	"encoding/json"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -36,7 +37,7 @@ type Vevent struct {
 
 func GetJson(body *string) *string {
 	prepared := prepareString(body)
-	(*prepared) = (*prepared)[1 : len(*prepared)-1]
+	//(*prepared) = (*prepared)[1 : len(*prepared)-1]
 	m := make(map[string]interface{})
 	parseBlocks(&m, *prepared)
 	json, _ := json.Marshal(m)
@@ -63,6 +64,9 @@ func parseBlocks(m *map[string]interface{}, block []string) int {
 			_m := make(map[string]interface{})
 			i++
 			i += parseBlocks(&_m, block[i:])
+			if val == "VEVENT" {
+				val = val + strconv.Itoa(i)
+			}
 			(*m)[val] = (&_m)
 			continue
 		}
