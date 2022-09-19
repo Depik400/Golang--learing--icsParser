@@ -11,8 +11,7 @@ import (
 func parse(res http.ResponseWriter, req *http.Request) {
 	body, _ := ioutil.ReadAll(req.Body)
 	bodyptr := string(body)
-
-	fmt.Fprintf(res, "%s", *icsParser.GetJson(&bodyptr))
+	fmt.Fprintf(res, "%s", *icsParser.ParallelGetJson(&bodyptr))
 }
 
 func main() {

@@ -2,9 +2,12 @@ package icsParser
 
 import (
 	"encoding/json"
+	"errors"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"golang.org/x/exp/slices"
 )
 
 type VCalendar struct {
@@ -33,6 +36,29 @@ type Vevent struct {
 	description  string
 	location     string
 	lastedit     string
+}
+
+func ParallelGetJson(body *string) *string {
+	rq := regexp.MustCompile("END:VEVENT")
+	list := rq.Split(*body, -1)
+	chunk := make(chan string, len(list))
+	results := make(chan *string, len(list))
+	function := func() {
+		data := <-chunk
+		data += "\nEND:VEVENT"
+		results <- GetJson(&(data))
+	}
+	for _, v := range list {
+		chunk <- v
+		go function()
+	}
+	resArray := make([]string, len(list))
+	for i := range resArray {
+		str := <-results
+		resArray[i] = *str
+	}
+	resStr := "[" + strings.Join(resArray, ",") + "]"
+	return &resStr
 }
 
 func GetJson(body *string) *string {
@@ -73,9 +99,58 @@ func parseBlocks(m *map[string]interface{}, block []string) int {
 		if "end" == strings.ToLower(key) {
 			return i
 		}
-		(*m)[key] = val
+		if slices.Contains([]string{
+			"DESCRIPTION",
+			"LOCATION",
+		}, key) {
+			(*m)[key] = val
+			continue
+		}
+		decomposeVal, err := parseRow(&val)
+		if err != nil {
+			(*m)[key] = val
+		} else {
+			(*m)[key] = &decomposeVal
+		}
 	}
 	return i
+}
+
+func parseRow(row *string) (*map[string]string, error) {
+	if !strings.Contains(*row, "=") && !strings.Contains(*row, ":") {
+		return nil, errors.New("cannot split string")
+	}
+	regex := regexp.MustCompile("[;]")
+	m := make(map[string]string)
+	items := regex.Split((*row), -1)
+	for _, v := range items {
+		splittedVal := strings.Split(v, "=")
+
+		if len(splittedVal) == 1 {
+			splitBy := strings.Split(splittedVal[0], ":")
+			if len(splitBy) >= 2 {
+				for len(splitBy) > 0 {
+					m[splitBy[0]] = splitBy[1]
+					splitBy = splitBy[2:]
+				}
+			} else {
+				m[splittedVal[0]] = ""
+			}
+		} else {
+			splitBy := strings.Split(splittedVal[1], ":")
+			if len(splitBy) > 2 {
+				m[splittedVal[0]] = splitBy[0]
+				splitBy = splitBy[1:]
+				for len(splitBy) > 0 {
+					m[splitBy[0]] = splitBy[1]
+					splitBy = splitBy[2:]
+				}
+			} else {
+				m[splittedVal[0]] = splittedVal[1]
+			}
+		}
+	}
+	return &m, nil
 }
 
 func optimize(array *[]string) {
